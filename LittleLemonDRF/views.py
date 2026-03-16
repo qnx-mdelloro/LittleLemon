@@ -6,7 +6,7 @@ import datetime
 from django.forms import ValidationError
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User, Group
-from django_filters.rest_framework import DjangoFilterBackend
+#from django_filters.rest_framework import DjangoFilterBackend
 # DRF Imports
 from rest_framework import generics, viewsets, status, filters
 from rest_framework.decorators import permission_classes, action
@@ -39,16 +39,25 @@ class MenuViewSet(viewsets.ViewSet):
     
     # ordering_fields = ['price', 'inventory']
     
-    filter_backends = [DjangoFilterBackend]
-    filter_fields = ['title', 'category__title']
+    #filter_backends = [DjangoFilterBackend]
+    #filter_fields = ['title', 'category__title']
     def get_permissions(self):
         # check the action and return the permission class accordingly
         if self.action in ['list', 'retrieve', 'create', 'update', 'partial_update', 'destroy']:
             return [IsAuthenticated()]
         return []
-    
-    def list(self, request):
+    def get_queryset(self):
         queryset = MenuItem.objects.all()
+        title = self.request.query_params.get('title')
+        category = self.request.query_params.get('category')
+        if title is not None:
+            queryset = queryset.filter(title__contains=title)
+        if category is not None:
+            queryset = queryset.filter(category__title__contains=category)
+        return queryset
+
+    def list(self, request):
+        queryset = self.get_queryset()
         serializer = MenuItemSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
