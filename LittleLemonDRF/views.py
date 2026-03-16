@@ -1,13 +1,14 @@
 # Python Imports
 from urllib3 import request
+import datetime
 
 # Django Imports
 from django.forms import ValidationError
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User, Group
-
+from django_filters.rest_framework import DjangoFilterBackend
 # DRF Imports
-from rest_framework import generics, viewsets, status
+from rest_framework import generics, viewsets, status, filters
 from rest_framework.decorators import permission_classes, action
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication, TokenAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -20,8 +21,26 @@ from rest_framework.response import Response
 from .serializers import MenuItemSerializer, CategorySerializer, CartSerializer, OrderSerializer, OrderItemSerializer, GroupSerializer, UserSerializer
 from .models import MenuItem, Category, Cart, Order, OrderItem
 
+class UserViewSet(viewsets.ViewSet):
+    authentication_classes = [JWTAuthentication, TokenAuthentication, SessionAuthentication]
+    def get_permissions(self):
+        # check the action and return the permission class accordingly
+        if self.action in ['list']:
+            return [IsAuthenticated()]
+        return []
+    def list(self, request):
+        
+        user = User.objects.get(id=request.user.id)
+        serializer = UserSerializer(user)
+        return Response(serializer.data)
+
 class MenuViewSet(viewsets.ViewSet):
     authentication_classes = [JWTAuthentication, TokenAuthentication, SessionAuthentication]
+    
+    # ordering_fields = ['price', 'inventory']
+    
+    filter_backends = [DjangoFilterBackend]
+    filter_fields = ['title', 'category__title']
     def get_permissions(self):
         # check the action and return the permission class accordingly
         if self.action in ['list', 'retrieve', 'create', 'update', 'partial_update', 'destroy']:
@@ -31,13 +50,13 @@ class MenuViewSet(viewsets.ViewSet):
     def list(self, request):
         queryset = MenuItem.objects.all()
         serializer = MenuItemSerializer(queryset, many=True)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def retrieve(self, request, pk=None):
         queryset = MenuItem.objects.all()
         menu_item = get_object_or_404(queryset, pk=pk)
         serializer = MenuItemSerializer(menu_item)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'])
     def create(self, request):
@@ -51,7 +70,7 @@ class MenuViewSet(viewsets.ViewSet):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': 'Permission denied'}, status=status.HTTP_401_UNAUTHORIZED)
     @action(detail=True, methods=['put'])
     def update(self, request, pk=None):
         user = User.objects.get(id=request.user.id)
@@ -63,7 +82,7 @@ class MenuViewSet(viewsets.ViewSet):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': 'Permission denied'}, status=status.HTTP_401_UNAUTHORIZED)
 
     @action(detail=True, methods=['patch'])
     def partial_update(self, request, pk=None):
@@ -76,7 +95,7 @@ class MenuViewSet(viewsets.ViewSet):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': 'Permission denied'}, status=status.HTTP_401_UNAUTHORIZED)
 
     @action(detail=True, methods=['delete'])
     def destroy(self, request, pk=None):
@@ -86,8 +105,8 @@ class MenuViewSet(viewsets.ViewSet):
             menu_item = get_object_or_404(queryset, pk=pk)
             
             menu_item.delete()
-            return Response({'message': 'Item deleted successfully'}, status=status.HTTP_200_OK)
-        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'message': 'Menu Item deleted successfully'}, status=status.HTTP_200_OK)
+        return Response({'error': 'Permission denied'}, status=status.HTTP_401_UNAUTHORIZED)
 
 # Manager Management Views
 
@@ -106,7 +125,7 @@ class ManagerGroupViewSet(viewsets.ViewSet):
             users = User.objects.filter(groups__name='Manager')
             serializer = UserSerializer(users, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': 'Permission denied'}, status=status.HTTP_401_UNAUTHORIZED)
     
     @action(detail=True, methods=['post'])
     def create(self, request):
@@ -118,7 +137,7 @@ class ManagerGroupViewSet(viewsets.ViewSet):
                 managers = Group.objects.get(name='Manager')
                 managers.user_set.add(user)
                 return Response({'status': 'Manager added successfully'}, status=status.HTTP_201_CREATED)
-        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': 'Permission denied'}, status=status.HTTP_401_UNAUTHORIZED)
     
     @action(detail=True, methods=['delete'])
     def destroy(self, request, pk=None):
@@ -127,8 +146,8 @@ class ManagerGroupViewSet(viewsets.ViewSet):
             user = get_object_or_404(User, id=pk)
             managers = Group.objects.get(name='Manager')
             managers.user_set.remove(user)
-            return Response({'message': 'Item deleted successfully'}, status=status.HTTP_200_OK)
-        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'message': 'Manager removed successfully'}, status=status.HTTP_200_OK)
+        return Response({'error': 'Permission denied'}, status=status.HTTP_401_UNAUTHORIZED)
     
 class DeliveryGroupViewSet(viewsets.ViewSet):
     authentication_classes = [JWTAuthentication, TokenAuthentication, SessionAuthentication]
@@ -142,10 +161,10 @@ class DeliveryGroupViewSet(viewsets.ViewSet):
     def list(self, request):
         requester = User.objects.get(id=request.user.id)
         if(requester.groups.filter(name='Manager').exists()):
-            users = User.objects.filter(groups__name='Delivery Staff')
+            users = User.objects.filter(groups__name='Delivery Crew')
             serializer = UserSerializer(users, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': 'Permission denied'}, status=status.HTTP_401_UNAUTHORIZED)
     
     @action(detail=True, methods=['post'])
     def create(self, request):
@@ -154,22 +173,23 @@ class DeliveryGroupViewSet(viewsets.ViewSet):
             username = request.data.get('username')
             if(username):
                 user = get_object_or_404(User, username=username)
-                managers = Group.objects.get(name='Delivery Staff')
+                managers = Group.objects.get(name='Delivery Crew')
                 managers.user_set.add(user)
-                return Response({'status': 'Delivery Staff added successfully'}, status=status.HTTP_201_CREATED)
-        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+                return Response({'status': 'Delivery Crew added successfully'}, status=status.HTTP_201_CREATED)
+        return Response({'error': 'Permission denied'}, status=status.HTTP_401_UNAUTHORIZED)
     
     @action(detail=True, methods=['delete'])
     def destroy(self, request, pk=None):
         requester = User.objects.get(id=request.user.id)
         if(requester.groups.filter(name='Manager').exists()):
             user = get_object_or_404(User, id=pk)
-            managers = Group.objects.get(name='Delivery Staff')
+            managers = Group.objects.get(name='Delivery Crew')
             managers.user_set.remove(user)
-            return Response({'message': 'Delivery Staff removed successfully'}, status=status.HTTP_200_OK)
-        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'message': 'Delivery Crew removed successfully'}, status=status.HTTP_200_OK)
+        return Response({'error': 'Permission denied'}, status=status.HTTP_401_UNAUTHORIZED)
 
 class CartViewSet(viewsets.ViewSet):
+    authentication_classes = [JWTAuthentication, TokenAuthentication, SessionAuthentication]
     def get_permissions(self):
         # check the action and return the permission class accordingly
         if self.action in ['list', 'create', 'destroy']:
@@ -186,20 +206,142 @@ class CartViewSet(viewsets.ViewSet):
         # access_token = request.META.get('HTTP_AUTHORIZATION', " ").split(' ')[1]
         # token = AccessToken(access_token)
         # user_id = token.payload['user_id']
-        user = User.objects.get(id=request.user.id)
-        serializer = CartSerializer(data=request.data)
+        user = get_object_or_404(User, id=request.user.id)
+        menu_item = get_object_or_404(MenuItem, id=request.data.get('menuitem_id'))
+        menu_item_serialized = MenuItemSerializer(menu_item)
+        
+        cart = request.data.copy()
+        cart['user_id'] = request.user.id
+        cart['unit_price'] = menu_item_serialized.data.get('price')
+        cart['price'] = float(cart['quantity']) * float(cart['unit_price'])
+        serializer = CartSerializer(data=cart)
         serializer.is_valid(raise_exception=True)
-        #serializer.save(user=user)
+        serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
         #return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
     
     @action(detail=True, methods=['delete'])
     def destroy(self, request, pk=None):
-        user = User.objects.get(id=request.user.id)
+        cart = Cart.objects.filter(user=request.user).delete()
+        return Response({'message': 'Cart cleared successfully'}, status=status.HTTP_200_OK)
+        #return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+class OrderViewSet(viewsets.ViewSet):
+    authentication_classes = [JWTAuthentication, TokenAuthentication, SessionAuthentication]
+    def get_permissions(self):
+        # check the action and return the permission class accordingly
+        if self.action in ['list', 'create', 'destroy']:
+            return [IsAuthenticated()]
+        return []
+    @action(detail=True, methods=['get'])
+    def list(self, request):
+        user = get_object_or_404(User, id=request.user.id)
         if(user.groups.filter(name='Manager').exists()):
-            queryset = MenuItem.objects.all()
-            menu_item = get_object_or_404(queryset, pk=pk)
+            queryset = OrderItem.objects.all()
+            serializer = OrderItemSerializer(queryset, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        elif(user.groups.filter(name='Delivery Crew').exists()):
+            queryset = Order.objects.filter(delivery_crew=user)
+            serializer = OrderSerializer(queryset, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            queryset = Order.objects.filter(user=user)
+            serializer = OrderSerializer(queryset, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+    @action(detail=True, methods=['get'])
+    def retrieve(self, request, pk=None):
+        user = get_object_or_404(User, id=request.user.id)
+        user_serializer = UserSerializer(user)
+        order = get_object_or_404(Order, id=pk)
+        order_serializer = OrderSerializer(order)
+        if order_serializer.data['user'] != user_serializer.data:
+            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        
+        order_items = OrderItem.objects.filter(order=order)
+        order_items_serializer = OrderItemSerializer(order_items, many=True)
+        return Response(order_items_serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def create(self, request):
+        # Create Order Object
+        user = get_object_or_404(User, id=request.user.id)
+        initial_order_data = {
+            'user_id': request.user.id,
+            'delivery_crew_id': None,
+            'date': datetime.date.today().strftime("%Y-%m-%d"),
+            'total': 0
+        }
+        order_serializer = OrderSerializer(data=initial_order_data)
+        order_serializer.is_valid(raise_exception=True)
+        order_serializer.save()
+        order_id = order_serializer.data['id']
+        
+        # Create Order Item Object Per Cart Item
+        subtotal = 0
+        cart = Cart.objects.filter(user=user)
+        cart_serializer = CartSerializer(cart, many=True)
+        for cart_item in cart_serializer.data:
+            order_item_data = {
+                'order_id': order_id,
+                'menuitem_id': cart_item['menuitem']['id'],
+                'quantity': cart_item['quantity'],
+                'unit_price': cart_item['unit_price'],
+                'price': cart_item['price']
+            }
+            order_item_serializer = OrderItemSerializer(data=order_item_data)
+            order_item_serializer.is_valid()
+            order_item_serializer.save()
+            subtotal += float(cart_item['price'])
+        
+        # Update Order Total
+        order = get_object_or_404(Order, id=order_id)
+        order_serializer = OrderSerializer(order, data={'total': subtotal}, partial=True)
+        order_serializer.is_valid()
+        order_serializer.save()
+        
+        cart = Cart.objects.filter(user=user).delete()
+        
+        return Response(order_serializer.data, status=status.HTTP_201_CREATED)
+        #return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+    @action(detail=True, methods=['patch'])
+    def partial_update(self, request, pk=None):
+        user = get_object_or_404(User, id=request.user.id)
+        
+        if(user.groups.filter(name='Manager').exists()):
+            queryset = Order.objects.filter(id=pk)
+            order = get_object_or_404(queryset, pk=pk)
+            cleaned_data = {}
+            if(len(request.data) > 2):
+                return Response(status=status.HTTP_403_FORBIDDEN)
+            if('delivery_crew_id' in request.data):
+                cleaned_data['delivery_crew_id'] = request.data['delivery_crew_id']
+            if('status' in request.data):
+                cleaned_data['status'] = request.data['status']
             
-            menu_item.delete()
-            return Response({'message': 'Item deleted successfully'}, status=status.HTTP_200_OK)
-        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+            serializer = OrderSerializer(order, data=cleaned_data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        elif(user.groups.filter(name='Delivery Crew').exists()):
+            queryset = Order.objects.filter(id=pk)
+            order = get_object_or_404(queryset, pk=pk)
+            cleaned_data = {}
+            if('status' in request.data and len(request.data) == 1):
+                cleaned_data['status'] = request.data['status']
+            
+            serializer = OrderSerializer(order, data=cleaned_data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({'error': 'Permission denied'}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    @action(detail=True, methods=['delete'])
+    def destroy(self, request, pk=None):
+        user = get_object_or_404(User, id=request.user.id)
+        if(user.groups.filter(name='Manager').exists()):
+            order = Order.objects.filter(id=pk).delete()
+            return Response({'message': 'Order deleted successfully'}, status=status.HTTP_200_OK)
+        return Response({'error': 'Permission denied'}, status=status.HTTP_401_UNAUTHORIZED)
+

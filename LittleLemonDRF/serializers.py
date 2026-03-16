@@ -6,7 +6,7 @@ from .models import MenuItem, Category, Cart, Order, OrderItem
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username']
+        fields = ['id', 'username', 'email']
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
@@ -30,7 +30,7 @@ class CartSerializer(serializers.ModelSerializer):
     menuitem = MenuItemSerializer(read_only=True)
     class Meta:
         model = Cart
-        fields = ['id', 'user_id', 'user', 'menuitem', 'quantity', 'unit_price', 'price']
+        fields = ['id', 'user_id', 'user', 'menuitem_id', 'menuitem', 'quantity', 'unit_price', 'price']
 
 class OrderSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(write_only=True)
@@ -47,4 +47,4 @@ class OrderItemSerializer(serializers.ModelSerializer):
     menuitem = MenuItemSerializer(read_only=True)
     class Meta:
         model = OrderItem
-        fields = ['id', 'order_id', 'order', 'menuitem', 'quantity', 'unit_price', 'price']
+        fields = ['id', 'order_id', 'order', 'menuitem_id', 'menuitem', 'quantity', 'unit_price', 'price']
