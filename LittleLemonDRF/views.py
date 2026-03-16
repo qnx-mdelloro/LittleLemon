@@ -36,7 +36,9 @@ class UserViewSet(viewsets.ViewSet):
 
 class MenuViewSet(viewsets.ViewSet):
     authentication_classes = [JWTAuthentication, TokenAuthentication, SessionAuthentication]
-    
+    filter_backends = [filters.OrderingFilter, filters.SearchFilter]
+    ordering_fields = ['id', 'price', 'inventory']
+    ordering = ['id']
     # ordering_fields = ['price', 'inventory']
     
     #filter_backends = [DjangoFilterBackend]
@@ -50,10 +52,14 @@ class MenuViewSet(viewsets.ViewSet):
         queryset = MenuItem.objects.all()
         title = self.request.query_params.get('title')
         category = self.request.query_params.get('category')
+        ordering = self.request.query_params.get('ordering')
         if title is not None:
             queryset = queryset.filter(title__contains=title)
         if category is not None:
             queryset = queryset.filter(category__title__contains=category)
+        if ordering is not None:
+            ordering_fields = [field.strip() for field in ordering.split(',')]
+            queryset = queryset.order_by(*ordering_fields)
         return queryset
 
     def list(self, request):
@@ -160,6 +166,7 @@ class ManagerGroupViewSet(viewsets.ViewSet):
     
 class DeliveryGroupViewSet(viewsets.ViewSet):
     authentication_classes = [JWTAuthentication, TokenAuthentication, SessionAuthentication]
+    
     def get_permissions(self):
         # check the action and return the permission class accordingly
         
@@ -242,20 +249,38 @@ class OrderViewSet(viewsets.ViewSet):
         if self.action in ['list', 'create', 'destroy']:
             return [IsAuthenticated()]
         return []
+    
+    def get_queryset(self, queryset):
+        if queryset is None:
+            queryset = OrderItem.objects.all()
+        title = self.request.query_params.get('title')
+        category = self.request.query_params.get('category')
+        ordering = self.request.query_params.get('ordering')
+        if title is not None:
+            queryset = queryset.filter(title__contains=title)
+        if category is not None:
+            queryset = queryset.filter(category__title__contains=category)
+        if ordering is not None:
+            ordering_fields = [field.strip() for field in ordering.split(',')]
+            queryset = queryset.order_by(*ordering_fields)
+        return queryset
+    
     @action(detail=True, methods=['get'])
     def list(self, request):
         user = get_object_or_404(User, id=request.user.id)
         if(user.groups.filter(name='Manager').exists()):
-            queryset = OrderItem.objects.all()
+            queryset = self.get_queryset(None)
             serializer = OrderItemSerializer(queryset, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         elif(user.groups.filter(name='Delivery Crew').exists()):
-            queryset = Order.objects.filter(delivery_crew=user)
-            serializer = OrderSerializer(queryset, many=True)
+            queryset = OrderItem.objects.filter(order__delivery_crew=user)
+            queryset = self.get_queryset(queryset)
+            serializer = OrderItemSerializer(queryset, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         else:
-            queryset = Order.objects.filter(user=user)
-            serializer = OrderSerializer(queryset, many=True)
+            queryset = OrderItem.objects.filter(order__user=user)
+            queryset = self.get_queryset(queryset)
+            serializer = OrderItemSerializer(queryset, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         
     @action(detail=True, methods=['get'])

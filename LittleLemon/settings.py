@@ -21,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 root = Path(__file__).parent.parent
 SECRET_KEY = config('SECRET_KEY')
-DEBUG = config('DEBUG')
+DEBUG = config('DEBUG', default=False)
 
 
 # Application definition
@@ -134,6 +134,14 @@ REST_FRAMEWORK = {
     #    'rest_framework_simplejwt.authentication.JWTAuthentication',
     #    'rest_framework.authentication.SessionAuthentication',
     #),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '1/min',
+        'user': '1000/day'
+    },
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 5,
     'DEFAULT_FILTER_BACKENDS': [
